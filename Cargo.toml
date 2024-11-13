@@ -11,4 +11,4 @@ serde = { version = "1.0.215", features = ["derive"] }
 dirs = "5.0.1"
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = "3.14.0"
