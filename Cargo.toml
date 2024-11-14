@@ -1,0 +1,18 @@
+[package]
+name = "to-not-do"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1.41.1", features = ["full"] }
+serde = { version = "1.0.215", features = ["derive"] }
+dirs = "5.0.1"
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+serde_json = "1.0.132"
+thiserror = "2.0.3"
+
+[dev-dependencies]
+tempfile = "3.14.0"
