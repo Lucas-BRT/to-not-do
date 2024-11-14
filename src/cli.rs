@@ -1,23 +1,25 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
+use uuid::{self, Uuid};
 
 #[derive(Parser)]
-pub struct Cli {
+pub struct Args {
     #[command(subcommand)]
-    command: Commands,
+    pub command: Commands,
 }
 
 #[derive(Debug, Subcommand, Clone)]
 #[command(rename_all = "kebab-case")]
 pub enum Commands {
     Add { task_description: String },
-    Update { task_id: u64 },
-    Delete { task_id: u64 },
+    Update { task_id: Uuid },
+    Delete { task_id: Uuid },
     List { filter: Option<TaskState> },
-    MarkDone { task_id: u64 },
-    MarkInProgress { task_id: u64 },
+    MarkDone { task_id: Uuid },
+    MarkInProgress { task_id: Uuid },
 }
 
-#[derive(Debug, ValueEnum, Clone, Copy)]
+#[derive(Debug, ValueEnum, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaskState {
     Todo,
     InProgress,
