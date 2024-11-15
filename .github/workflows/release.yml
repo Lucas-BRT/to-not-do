@@ -56,10 +56,13 @@ jobs:
             - name: install Rust stable
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Rust cache
-              uses: swatinem/rust-cache@v2
+            - name: Cache Cargo registry
+              uses: actions/cache@v3
               with:
-                  workspaces: "./src -> target"
+                path: ~/.cargo/registry
+                key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+                restore-keys: |
+                  ${{ runner.os }}-cargo-registry-
 
             - name: build Rust application
               run: cargo build ${{ matrix.args }}
