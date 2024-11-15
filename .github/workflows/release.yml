@@ -1,0 +1,112 @@
+name: "publish"
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - release
+            - testar-actions
+
+jobs:
+    create-release:
+        permissions:
+            contents: write
+        runs-on: ubuntu-latest
+        outputs:
+            release_id: ${{ steps.create-release.outputs.result }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: get version
+              run: echo "PACKAGE_VERSION=$(cat Cargo.toml | grep version | head -n 1 | awk -F'=' '{ print $2 }' | xargs)" >> $GITHUB_ENV
+            - name: get product_name
+              run: echo "PRODUCT_NAME=$(cat Cargo.toml | grep name | head -n 1 | awk -F'=' '{ print $2 }' | xargs)" >> $GITHUB_ENV
+
+            - name: create release
+              id: create-release
+              uses: actions/github-script@v6
+              with:
+                  script: |
+                      const { data } = await github.rest.repos.createRelease({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        tag_name: `${process.env.PRODUCT_NAME}-v${process.env.PACKAGE_VERSION}`,
+                        name: `${process.env.PRODUCT_NAME} v${process.env.PACKAGE_VERSION}`,
+                        body: 'Take a look at the assets to download and install this app.',
+                        draft: true,
+                        prerelease: false
+                      })
+                      return data.id
+
+    build:
+        needs: create-release
+        permissions:
+            contents: write
+        strategy:
+            fail-fast: false
+            matrix:
+                platform: [ubuntu-latest, windows-latest, macos-latest]
+                args: ["--release"]
+
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: "./src -> target"
+
+            - name: build Rust application
+              run: cargo build ${{ matrix.args }}
+
+            - name: create release assets
+              run: |
+                  mkdir -p release-assets
+                  cp target/release/${{ env.PRODUCT_NAME }} release-assets/
+
+            - name: upload release assets
+              uses: actions/upload-artifact@v3
+              with:
+                  name: release-assets
+                  path: release-assets/
+
+            - uses: actions/github-script@v6
+              env:
+                release_id: ${{ needs.create-release.outputs.release_id }}
+              with:
+                script: |
+                    github.rest.repos.uploadReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: process.env.release_id,
+                    name: process.env.PRODUCT_NAME,  # Usando o nome do projeto
+                    data: fs.createReadStream('release-assets/' + process.env.PRODUCT_NAME)  # Usando o nome do projeto no arquivo
+                    })
+            
+
+    publish-release:
+        permissions:
+            contents: write
+        runs-on: ubuntu-latest
+        needs: [create-release, build]
+
+        steps:
+            - name: publish release
+              id: publish-release
+              uses: actions/github-script@v6
+              env:
+                  release_id: ${{ needs.create-release.outputs.release_id }}
+              with:
+                  script: |
+                      github.rest.repos.updateRelease({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        release_id: process.env.release_id,
+                        draft: false,
+                        prerelease: false
+                      })
