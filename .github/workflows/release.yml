@@ -66,8 +66,8 @@ jobs:
 
             - name: create release assets
               run: |
-                  mkdir -p release-assets
-                  cp target/release/ release-assets/
+                  mkdir release-assets
+                  cp -r target/release/* release-assets/
 
             - name: upload release assets
               uses: actions/upload-artifact@v3
