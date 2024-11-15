@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_add_command() {
-        let args = Args::parse_from(&["to-not-do", "add", "Test task"]);
+        let args = Args::parse_from(["to-not-do", "add", "Test task"]);
         if let Commands::Add { task_description } = args.command {
             assert_eq!(task_description, "Test task");
         } else {
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn test_update_command() {
         let task_id = Uuid::new_v4();
-        let args = Args::parse_from(&["to-not-do", "update", &task_id.to_string(), "Updated task"]);
+        let args = Args::parse_from(["to-not-do", "update", &task_id.to_string(), "Updated task"]);
         if let Commands::Update {
             task_id: id,
             task_description,
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_delete_command() {
         let task_id = Uuid::new_v4();
-        let args = Args::parse_from(&["to-not-do", "delete", &task_id.to_string()]);
+        let args = Args::parse_from(["to-not-do", "delete", &task_id.to_string()]);
         if let Commands::Delete { task_id: id } = args.command {
             assert_eq!(id, task_id);
         } else {
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_list_command_with_filter() {
-        let args = Args::parse_from(&["to-not-do", "list", "done"]);
+        let args = Args::parse_from(["to-not-do", "list", "done"]);
         if let Commands::List { filter } = args.command {
             assert_eq!(filter, Some(TaskState::Done));
         } else {
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_list_command_without_filter() {
-        let args = Args::parse_from(&["to-not-do", "list"]);
+        let args = Args::parse_from(["to-not-do", "list"]);
         if let Commands::List { filter } = args.command {
             assert_eq!(filter, None);
         } else {
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn test_mark_done_command() {
         let task_id = Uuid::new_v4();
-        let args = Args::parse_from(&["to-not-do", "mark-done", &task_id.to_string()]);
+        let args = Args::parse_from(["to-not-do", "mark-done", &task_id.to_string()]);
         if let Commands::MarkDone { task_id: id } = args.command {
             assert_eq!(id, task_id);
         } else {
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn test_mark_in_progress_command() {
         let task_id = Uuid::new_v4();
-        let args = Args::parse_from(&["to-not-do", "mark-in-progress", &task_id.to_string()]);
+        let args = Args::parse_from(["to-not-do", "mark-in-progress", &task_id.to_string()]);
         if let Commands::MarkInProgress { task_id: id } = args.command {
             assert_eq!(id, task_id);
         } else {

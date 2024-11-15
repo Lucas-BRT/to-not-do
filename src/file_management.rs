@@ -207,7 +207,7 @@ impl DatabaseManager {
         let json_db = serde_json::to_string_pretty(db).expect("Failed to serialize database");
 
         db_file
-            .write_all(&json_db.as_bytes())
+            .write_all(json_db.as_bytes())
             .expect("Failed to write to database file");
     }
 
@@ -220,6 +220,7 @@ impl DatabaseManager {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(path)
             .expect("Failed to create database file");
 
@@ -294,7 +295,7 @@ mod tests {
         assert_eq!(db_manager.db.tasks.len(), 1);
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
-        let new_task = tasks.get(0).expect("Failed to get task");
+        let new_task = tasks.first().expect("Failed to get task");
 
         assert_eq!(tasks.len(), 1);
         assert_eq!(*new_task, task);
@@ -383,7 +384,7 @@ mod tests {
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
-        let task_id = tasks.get(0).expect("Failed to get task").id;
+        let task_id = tasks.first().expect("Failed to get task").id;
         db_manager
             .set_task_state(task_id, TaskState::Done)
             .expect("Failed to update task state");
@@ -415,7 +416,7 @@ mod tests {
         assert_eq!(db_manager.db.tasks.len(), 1);
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
-        let task_id = tasks.get(0).expect("Failed to get task").id;
+        let task_id = tasks.first().expect("Failed to get task").id;
 
         db_manager
             .delete_task(task_id)
