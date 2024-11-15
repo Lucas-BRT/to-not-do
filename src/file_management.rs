@@ -55,26 +55,6 @@ impl Task {
         }
     }
 
-    pub fn id(&self) -> Uuid {
-        self.id
-    }
-
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    pub fn state(&self) -> TaskState {
-        self.state
-    }
-
-    fn created_at(&self) -> NaiveDate {
-        self.created_at
-    }
-
-    fn updated_at(&self) -> NaiveDate {
-        self.updated_at
-    }
-
     fn set_state(&mut self, state: TaskState) {
         self.state = state;
         self.updated_at = chrono::Utc::now().date_naive();
@@ -179,10 +159,6 @@ impl DatabaseManager {
             .filter(|t| t.state == state)
             .cloned()
             .collect()
-    }
-
-    pub fn get_task(&mut self, task_id: Uuid) -> Option<&Task> {
-        self.db.tasks.iter().find(|t| t.id == task_id)
     }
 
     pub fn add_task(&mut self, task: &Task) -> Result<(), ToNotDoError> {
@@ -313,7 +289,7 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
         assert_eq!(db_manager.db.tasks.len(), 1);
 
@@ -341,7 +317,7 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
         let mut db_manager = DatabaseManager::open(&db_path);
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
@@ -378,7 +354,7 @@ mod tests {
                 updated_at: Utc::now().date_naive(),
             };
 
-            db_manager.add_task(&task);
+            db_manager.add_task(&task).expect("Failed to add task");
         }
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
@@ -403,7 +379,7 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
@@ -435,13 +411,15 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
         assert_eq!(db_manager.db.tasks.len(), 1);
 
         let tasks = db_manager.get_tasks().expect("Failed to get tasks");
         let task_id = tasks.get(0).expect("Failed to get task").id;
 
-        db_manager.delete_task(task_id);
+        db_manager
+            .delete_task(task_id)
+            .expect("Failed to remove task");
 
         assert_eq!(db_manager.db.tasks.len(), 0);
     }
