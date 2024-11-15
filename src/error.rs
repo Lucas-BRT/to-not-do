@@ -12,4 +12,6 @@ pub enum DatabaseError {
     TaskNotFound(Uuid),
     #[error("Task with UUID {0} already exists")]
     UuidAlreadyExists(Uuid),
+    #[error("Failed to read file {0}")]
+    FailedToReadFile(#[from] std::io::Error),
 }

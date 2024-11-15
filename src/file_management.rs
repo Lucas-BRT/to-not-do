@@ -1,4 +1,5 @@
 use std::{
+    fmt::{self, Display, Formatter},
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
@@ -8,11 +9,11 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::cli::TaskState;
+use crate::{cli::TaskState, error::ToNotDoError};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const APP_NAME: &str = env!("CARGO_PKG_NAME");
-const DB_FILE_NAME: &str = "task_manager.json";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const APP_NAME: &str = env!("CARGO_PKG_NAME");
+pub const DB_FILE_NAME: &str = "task_manager.json";
 
 pub fn create_data_directory(data_dir: &Path) -> PathBuf {
     let app_dir = data_dir.join(APP_NAME);
@@ -33,6 +34,16 @@ pub struct Task {
     updated_at: NaiveDate,
 }
 
+impl Display for Task {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Task: {}\nState: {:?}\nCreated at: {}\nUpdated at: {}\nId: {}",
+            self.description, self.state, self.created_at, self.updated_at, self.id
+        )
+    }
+}
+
 impl Task {
     pub fn new(description: &str) -> Self {
         Self {
@@ -42,26 +53,6 @@ impl Task {
             created_at: chrono::Utc::now().date_naive(),
             updated_at: chrono::Utc::now().date_naive(),
         }
-    }
-
-    pub fn id(&self) -> Uuid {
-        self.id
-    }
-
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    pub fn state(&self) -> TaskState {
-        self.state
-    }
-
-    fn created_at(&self) -> NaiveDate {
-        self.created_at
-    }
-
-    fn updated_at(&self) -> NaiveDate {
-        self.updated_at
     }
 
     fn set_state(&mut self, state: TaskState) {
@@ -103,7 +94,7 @@ impl DatabaseManager {
             return Self::create(path_to_db);
         }
 
-        let db = Self::read(path_to_db);
+        let db = Self::read(path_to_db).expect("Failed to read database file");
 
         Self {
             db_path: path_to_db.to_path_buf(),
@@ -111,46 +102,101 @@ impl DatabaseManager {
         }
     }
 
+    pub fn update_description(
+        &mut self,
+        task_id: Uuid,
+        description: &str,
+    ) -> Result<(), ToNotDoError> {
+        if let Some(task) = self.db.tasks.iter_mut().find(|t| t.id == task_id) {
+            task.set_description(description);
+            Self::save(&self.db_path, &self.db);
+            Ok(())
+        } else {
+            Err(ToNotDoError::DatabaseError(
+                crate::error::DatabaseError::TaskNotFound(task_id),
+            ))
+        }
+    }
+
     pub fn contains_task(&mut self, task_id: Uuid) -> bool {
         self.db.tasks.iter().any(|t| t.id == task_id)
     }
 
-    pub fn delete_task(&mut self, task_id: Uuid) {
-        self.db.tasks.retain(|t| t.id != task_id);
-        Self::save(&self.db_path, &self.db);
+    pub fn delete_task(&mut self, task_id: Uuid) -> Result<(), ToNotDoError> {
+        if self.contains_task(task_id) {
+            self.db.tasks.retain(|t| t.id != task_id);
+            Self::save(&self.db_path, &self.db);
+            Ok(())
+        } else {
+            Err(ToNotDoError::DatabaseError(
+                crate::error::DatabaseError::TaskNotFound(task_id),
+            ))
+        }
     }
 
-    pub fn set_task_state(&mut self, task_id: Uuid, state: TaskState) -> Result<(), ()> {
+    pub fn set_task_state(&mut self, task_id: Uuid, state: TaskState) -> Result<(), ToNotDoError> {
         if let Some(task) = self.db.tasks.iter_mut().find(|t| t.id == task_id) {
             task.set_state(state);
             Self::save(&self.db_path, &self.db);
             Ok(())
         } else {
-            Err(())
+            Err(ToNotDoError::DatabaseError(
+                crate::error::DatabaseError::TaskNotFound(task_id),
+            ))
         }
     }
 
-    pub fn get_tasks(&mut self) -> &Vec<Task> {
-        self.db = Self::read(&self.db_path);
+    pub fn get_tasks(&mut self) -> Result<&Vec<Task>, ToNotDoError> {
+        self.db = Self::read(&self.db_path)?;
 
-        &self.db.tasks
+        Ok(&self.db.tasks)
     }
 
-    pub fn get_task(&mut self, task_id: Uuid) -> Option<&Task> {
-        self.db.tasks.iter().find(|t| t.id == task_id)
+    pub fn filter_tasks(&mut self, state: TaskState) -> Vec<Task> {
+        self.db
+            .tasks
+            .iter()
+            .filter(|t| t.state == state)
+            .cloned()
+            .collect()
     }
 
-    pub fn add_task(&mut self, task: &Task) {
+    pub fn add_task(&mut self, task: &Task) -> Result<(), ToNotDoError> {
+        if self.contains_task(task.id) {
+            return Err(ToNotDoError::DatabaseError(
+                crate::error::DatabaseError::UuidAlreadyExists(task.id),
+            ));
+        }
+
         self.db.tasks.push(task.clone());
         Self::save(&self.db_path, &self.db);
+        Ok(())
     }
 
-    fn read(db_file_path: &Path) -> Database {
-        let db_file = File::open(db_file_path).expect("Failed to open database file");
+    fn read(db_file_path: &Path) -> Result<Database, ToNotDoError> {
+        let db_file = match File::open(db_file_path) {
+            Ok(file) => file,
+            Err(_) => {
+                return Err(ToNotDoError::DatabaseError(
+                    crate::error::DatabaseError::FailedToReadFile(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Database file not found",
+                    )),
+                ))
+            }
+        };
 
         let reader = std::io::BufReader::new(db_file);
 
-        serde_json::from_reader(reader).expect("Failed to read database file")
+        match serde_json::from_reader(reader) {
+            Ok(db) => Ok(db),
+            Err(_) => Err(ToNotDoError::DatabaseError(
+                crate::error::DatabaseError::FailedToReadFile(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Failed to read database file",
+                )),
+            )),
+        }
     }
 
     fn save(db_path: &Path, db: &Database) {
@@ -205,7 +251,7 @@ mod tests {
 
         assert!(db_path.exists());
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
         assert!(tasks.is_empty());
     }
@@ -221,7 +267,7 @@ mod tests {
 
         assert!(db_path.exists());
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
         assert!(tasks.is_empty());
     }
@@ -243,14 +289,15 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
         assert_eq!(db_manager.db.tasks.len(), 1);
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
+        let new_task = tasks.get(0).expect("Failed to get task");
 
         assert_eq!(tasks.len(), 1);
-        assert_eq!(tasks[0], task);
+        assert_eq!(*new_task, task);
     }
 
     #[test]
@@ -270,10 +317,10 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
         let mut db_manager = DatabaseManager::open(&db_path);
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
         println!("{:?}", tasks.len());
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0], task);
@@ -307,10 +354,10 @@ mod tests {
                 updated_at: Utc::now().date_naive(),
             };
 
-            db_manager.add_task(&task);
+            db_manager.add_task(&task).expect("Failed to add task");
         }
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
         assert_eq!(tasks.len(), 100);
     }
@@ -332,16 +379,16 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
 
-        let task_id = tasks[0].id;
+        let task_id = tasks.get(0).expect("Failed to get task").id;
         db_manager
             .set_task_state(task_id, TaskState::Done)
             .expect("Failed to update task state");
 
-        let new_tasks = db_manager.get_tasks();
+        let new_tasks = db_manager.get_tasks().expect("Failed to get tasks");
         let updated_task = new_tasks.iter().find(|t| t.id == task_id).unwrap();
 
         assert_eq!(updated_task.state, TaskState::Done);
@@ -364,13 +411,15 @@ mod tests {
             updated_at: Utc::now().date_naive(),
         };
 
-        db_manager.add_task(&task);
+        db_manager.add_task(&task).expect("Failed to add task");
         assert_eq!(db_manager.db.tasks.len(), 1);
 
-        let tasks = db_manager.get_tasks();
+        let tasks = db_manager.get_tasks().expect("Failed to get tasks");
         let task_id = tasks.get(0).expect("Failed to get task").id;
 
-        db_manager.delete_task(task_id);
+        db_manager
+            .delete_task(task_id)
+            .expect("Failed to remove task");
 
         assert_eq!(db_manager.db.tasks.len(), 0);
     }
