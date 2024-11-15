@@ -34,7 +34,7 @@ jobs:
                         tag_name: `${process.env.PRODUCT_NAME}-v${process.env.PACKAGE_VERSION}`,
                         name: `${process.env.PRODUCT_NAME} v${process.env.PACKAGE_VERSION}`,
                         body: 'Take a look at the assets to download and install this app.',
-                        draft: true,
+                        draft: true,  # Mantém o release como rascunho
                         prerelease: false
                       })
                       return data.id
@@ -78,6 +78,15 @@ jobs:
                   name: release-assets
                   path: release-assets/
 
+            - name: upload release asset to GitHub
+              uses: actions/upload-release-asset@v1
+              with:
+                upload_url: ${{ steps.create-release.outputs.upload_url }}
+                asset_path: release-assets/${{ env.PRODUCT_NAME }}-${{ runner.os }}  # Nome do binário baseado em PRODUCT_NAME e plataforma
+                asset_name: ${{ env.PRODUCT_NAME }}-${{ runner.os }}  # Nome do binário a ser mostrado no GitHub
+                asset_content_type: application/octet-stream
+                
+
     publish-release:
         permissions:
             contents: write
@@ -96,6 +105,6 @@ jobs:
                         owner: context.repo.owner,
                         repo: context.repo.repo,
                         release_id: process.env.release_id,
-                        draft: false,
+                        draft: false,  # Torna o release público
                         prerelease: false
                       })
